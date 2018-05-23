@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Rapid Assessment of Lamp Spectrum to Quantify Ecological Effects of Light at Night</title>
+<meta charset="UTF-8">
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+
+<script src="https://d3js.org/d3.v4.min.js"></script>
+<script src="line.js"></script>
+
+<style>
+body {background-color:#f2f2f2; font-family: Segoe UI, Helvetica; margin:2em; }
+
+.label {
+	font-size: 60%;
+	text-align: center;
+	width: 100%;
+	background-color:#535889;
+	color: #fff;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.labelhead {
+	font-weight: 700;
+	font-size: 70%;
+	text-align: center;
+	width: 100%;
+	text-overflow: ellipsis;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.block {
+	width: 128px;
+	height: 72px;
+	margin: 6px 2px;
+	background-color: rgba(255, 255, 255, 0.7);
+	vertical-align: top;
+	display: inline-block;
+	border: 1px solid #eee;
+	position: relative;
+}
+
+.blockhead {
+	background-color: transparent;
+	border: 1px solid transparent;
+}
+
+.progress {
+	background-color: rgba(255, 241, 192, 1);
+	text-align: right;
+	font-size: 50%;
+}
+
+form, select {
+	font-size: 120%;
+	margin: 0.5em 0;
+	padding: 0.2em;
+}
+
+</style>
+
+</head>
+<body>
+
+<h1>Rapid Assessment of Lamp Spectrum to Quantify Ecological Effects of Light at Night</h1>
+<i>Longcore, Rodríguez, Witherington, Penniman, Herf, and Herf 2017</i>
+<br/>
+<br/>
+<!-- mode -->
+<form action="." id="modeform">
+	Metric shown:
+<select name="mode" onchange="this.form.submit()">
+  <option id='d65' selected value="d65">Actinic power per lux (indexed to D65)</option>
+  <option id='power' value="power">Actinic power per total power</option>
+  <option disabled>----</option>
+  <option id='perlux' value="perlux">Actinic Power per lux (&micro;W/cm<sup>2</sup>/lux)</option>
+</select>
+</form>
+
+<script>
+
+	var metric = "d65";
+
+	function setup() {
+		var s = location.search;
+		if (s.indexOf("power") != -1) {
+			document.getElementById("power").selected = true;
+			metric = "power";
+		}
+
+		if (s.indexOf("perlux") != -1) {
+			document.getElementById("perlux").selected = true;
+			metric = "perlux";
+		}
+		if (s.indexOf("d65") != -1) {
+			document.getElementById("d65").selected = true;
+			metrix = "d65";
+		}
+	}
+	setup();
+</script>
+
+<script>
+	var spd = {};
+	var action = [];
+	var done = 0;
+
+	d3.csv("csv/SPD.csv", function(error, data) {
+
+		data.forEach(function(d) {
+			for (f in d) {
+				if (!spd[f]) spd[f] = [];
+
+				var df = parseFloat(d[f]);
+				if (isNaN(df)) df = -1;	// invalid marker
+
+				spd[f].push(df);
+			}
+		});
+		displayResult();
+	});
+
+	function d3csvrow(url, callback) {
+		d3.request(url)
+	    	.mimeType("text/csv")
+	    	.response(function(xhr) { return d3.csvParseRows(xhr.responseText); })
+	    	.get(callback);
+	}
+
+	d3csvrow("csv/ActionSpectra.csv", function(error, data) {
+		if (data.length < 2) return;
+
+		var r0 = data[0];
+
+		// make (ordered) index structures for first row
+		for (var i = 0; i < r0.length; i += 2) {
+			var tmp = {"name": r0[i + 1], "base": 0, "dt": 0, "wl": [], "data": []};
+			action.push(tmp);
+		}
+
+		console.log(action, data.length);
+
+		for (var r = 1; r < data.length; r ++) {
+			
+			var rd = data[r];
+			for (var i = 0; i < rd.length; i += 2) {
+
+				var oi = action[i / 2];
+
+				var wl = parseFloat(rd[i]);
+				var power = parseFloat(rd[i + 1]);
+
+				if (!isNaN(wl) && !isNaN(power)) {
+					oi.wl.push(wl);
+					oi.data.push(power);
+					if (oi.base && !oi.dt) oi.dt = wl - oi.base;
+					if (oi.base == 0) oi.base = wl;
+				}
+			}
+		}
+
+		// VERIFY ACTINIC (max=1.0)
+
+		for (var i = 0; i < action.length; i++) {
+			console.log(action[i].name, action[i]);
+		}
+
+		displayResult();
+	});
+
+	// lerp low-resolution action spectra to whatever wavelength you need here:
+	function lerpAction(act, wl) {
+		var pos = (wl - act.base) / act.dt;
+		var ind = Math.floor(pos);
+		var frc = pos - ind;
+
+		if (ind < 0) return 0;
+		if (ind >= act.data.length) return 0;
+
+		var result = act.data[ind];
+		if (ind + 1 < act.data.length) {
+			result += (act.data[ind + 1] - act.data[ind]) * frc;
+		}
+
+		return result;
+	}
+
+	// using previously-loaded data, calculate s * a (where they overlap)
+	function doIntegral(spec, act) {
+
+		var r = {};
+
+		if (!spec || !act) {
+			console.log("Could not find data", spec, act);
+			return 0;
+		}
+
+		var specwl = spd["Wavelength"];
+
+		if (!specwl) {
+			console.log("Could not find wavelength column");
+			return 0;
+		}
+
+		// loop over SPD wavelengths:
+		var w0 = specwl[0];
+		var w1 = specwl[specwl.length - 1] + 1;
+
+		// you could adapt the input to another resolution, as long as you make D65 XX nm as well:
+		var dt = specwl[1] - specwl[0];
+
+		var sum = 0;
+		var total = 0;
+
+		r.data = [];
+
+		// not very well bounds-checked here:
+		for (var i = 0; i < specwl.length; i ++) {
+			var wl = specwl[i];
+			if (isNaN(spec[i])) {
+				console.log(wl, "invalid");
+				continue;
+			}
+
+			var a = lerpAction(act, wl);
+			sum += spec[i] * a * dt;
+
+			r.data.push(spec[i] * a);
+
+			total += spec[i];
+		}
+	
+		r.sum = sum;
+		r.total = total;
+
+		return r;
+	}
+
+	function addGraph(container, wl, data, lab, data2, p, pformat) {
+
+		var cont = document.createElement('div');	
+			cont.className = data2 ? "block" : "block blockhead";
+			container.appendChild(cont);
+
+		// for placeholder only
+		if (!lab) return;
+
+		var c = document.createElement('canvas');
+			c.width = 120;
+			c.height = 40;
+
+		// indicate effect
+		if (p) {
+			var pct = document.createElement('div');
+			pct.className = "progress";
+			if (p > 1) p = 1;
+			if (p < 0) p = 0;
+
+			var p100 = 100 * p;
+			if (!pformat) pformat = p100.toFixed(0) + "%";
+			pct.style.width = p100 + "%";
+			pct.innerHTML = pformat;
+		}
+
+		var label = document.createElement('div');
+			label.innerHTML = lab;
+
+			if (data2) {
+				label.className = "label";
+			} else {
+				label.className = "labelhead";
+			}
+
+		cont.appendChild(label);
+		if (pct) cont.appendChild(pct);
+		cont.appendChild(c);
+
+
+		if (data) {
+			var gr = new Graph(c);
+				gr.Clear();
+				gr.SetScale(data2 ? data2 : data);
+
+				if (data2) gr.Draw(data2, "rgba(255, 64, 64, 0.8)");
+				gr.Draw(data, "#228");
+		}
+	}
+
+	function makeRow(parent) {
+		var f = document.createElement('div');
+		f.style.whiteSpace = 'nowrap';
+		parent.appendChild(f);
+
+		return f;
+	}
+
+	// do m x n integrals so you don't have to ask:
+	function displayResult() {
+		done ++;
+		if (done == 1) return;
+
+		// find photopic
+		var photopic;
+
+		for (var i = 0; i < action.length; i++) {
+			if (action[i].name.indexOf("Photopic") != -1) {
+				photopic = action[i];
+				break;
+			}
+		}
+
+		// find D65 and warn user if it's not there anymore
+		var specD65 = spd["D65"];
+		if (!specD65) {
+			alert("We recommend including D65 in your SPD file for metric calculation.")
+		}
+
+		var multiples = document.getElementById('multiples');
+		var rowdata = makeRow(multiples);
+
+		// add corner box:
+		addGraph(rowdata, 0);
+
+		// add top graphs for action spectra:
+		for (var i = 0; i < action.length; i++) {
+			if (action[i].name == "Wavelength") continue;
+
+			addGraph(rowdata, 0, action[i].data, action[i].name);
+		}
+    	
+    	var wldata = spd["Wavelength"];
+
+    	var D65index = {};
+
+		for (var s in spd) {
+			if (s == "Wavelength") continue;
+
+			rowdata = makeRow(multiples);
+
+			addGraph(rowdata, wldata, spd[s], s);
+
+			var graphdata = [];
+			var dataphotopic = doIntegral(spd[s], photopic);
+
+			for (var i = 0; i < action.length; i++) {
+				var aname = action[i].name;
+				if (aname == "Wavelength") continue;
+
+				var data = doIntegral(spd[s], action[i]);
+
+				if (s == "D65") {
+					D65index[aname] = data;
+				}
+
+				var photopicScale = 683;
+
+				var imp = {};
+				imp.power = data.sum / data.total;
+				imp.perlux = data.sum / dataphotopic.sum;
+
+				imp.d65 = 1.0;
+
+				if (D65index[aname] && D65index[photopic.name]) {
+					imp.d65 = data.sum / dataphotopic.sum;
+					imp.d65 /= D65index[aname].sum / D65index[photopic.name].sum;
+				}
+
+				if (data.data) {
+					var xname = s + " (" + action[i].name + ")";
+					var impact;
+					var imptext;
+
+					if (metric == "d65") impact = imp.d65;
+					if (metric == "perlux") {
+						impact = imp.perlux
+						imptext = imp.perlux.toPrecision(3) + "&microW/cm<sup>2</sup>/lux";
+					}
+					if (metric == "power") {
+						impact = imp.power;
+					}
+
+					addGraph(rowdata, wldata, data.data, xname, spd[s], impact, imptext);
+				}
+			}
+		}
+	}
+
+</script>
+
+<div id='multiples'></div>
+<table id='result'>
+
+</table>
+
+</body>
+</html>
