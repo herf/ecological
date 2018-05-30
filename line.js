@@ -55,3 +55,45 @@ Graph.prototype.Draw = function(data, co) {
 	ct.stroke();
 	ct.closePath();
 }
+
+function AddChart(r, p, title, caption) {
+
+	var c = document.createElement("div");
+
+	var el = document.body;
+	if (p) el = document.getElementById(p);
+	el.appendChild(c);
+
+	var out = [];
+	out.push("<div class='g'>");
+
+	var maxval = 0;
+	for (var i = 0; i < r.length; i++) {
+		if (maxval < r[i].value) maxval = r[i].value;
+	}
+
+	if (title) {
+		out.push("<div class='gtitle'>" + title + "</div>");
+	}
+
+	for (var i = 0; i < r.length; i++) {
+		out.push("<div class='grow'>");
+			out.push("<div class='glab'>" + r[i].label + "</div>");
+			var amt = 100 * (r[i].value / maxval);
+			//var pxwidth = 5 * amt;
+			var pctwidth = 0.5 * amt;
+			var extrastyle = "";
+			if (r[i].color) extrastyle = "background-color: " + r[i].color + ";";
+
+			out.push("<div class='gfill' style='" + extrastyle + "width:" + pctwidth + "%'></div>");
+			out.push("<div class='gamt'>" + r[i].value.toPrecision(4) + "</div>");
+		out.push("</div>");
+	}
+	if (caption) {
+		out.push("<div class='gsub'>" + caption + "</div>");
+	}
+	out.push("</div>");
+
+	c.innerHTML = out.join("");
+}
+
