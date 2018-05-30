@@ -8,7 +8,9 @@
 
 <!-- yes I intended to use d3 for more than loading CSVs. Maybe next version. -->
 <script src="https://d3js.org/d3.v4.min.js"></script>
+
 <script src="line.js"></script>
+<script src="calc.js"></script>
 
 <link rel="stylesheet" type="text/css" href="style.css">
 
@@ -71,13 +73,16 @@ Taxonomic group:
 			document.getElementById("nocri").checked = true;
 		}
 
-		metric = qp["mode"];
-		document.getElementById(metric).selected = true;
+		// use defaults if none specified:
+		metric = qp["mode"] ? qp["mode"] : metric;
+		var mobj = document.getElementById(metric);
+		if (mobj) mobj.selected = true;
 
-		group = qp["group"];
-		document.getElementById(group).selected = true;
+		group = qp["group"] ? qp["group"] : group;
+		var gobj = document.getElementById(group);
+		if (gobj) gobj.selected = true;
 
-		console.log("Using", group, metric, useCRI);
+		//console.log("Using", group, metric, useCRI);
 	}
 	setup();
 </script>
@@ -130,8 +135,6 @@ Taxonomic group:
 			action.push(tmp);
 		}
 
-		console.log(action, data.length);
-
 		for (var r = 1; r < data.length; r ++) {
 			
 			var rd = data[r];
@@ -154,73 +157,6 @@ Taxonomic group:
 		displayResult();
 	});
 
-	// lerp low-resolution action spectra to whatever wavelength you need here:
-	function lerpAction(act, wl) {
-		var pos = (wl - act.base) / act.dt;
-		var ind = Math.floor(pos);
-		var frc = pos - ind;
-
-		if (ind < 0) return 0;
-		if (ind >= act.data.length) return 0;
-
-		var result = act.data[ind];
-		if (ind + 1 < act.data.length) {
-			result += (act.data[ind + 1] - act.data[ind]) * frc;
-		}
-
-		return result;
-	}
-
-	// using previously-loaded data, calculate s * a (where they overlap)
-	function doIntegral(spec, act) {
-
-		var r = {};
-
-		if (!spec || !act) {
-			console.log("Could not find data", spec, act);
-			return 0;
-		}
-
-		var specwl = spd["Wavelength"];
-
-		if (!specwl) {
-			console.log("Could not find wavelength column");
-			return 0;
-		}
-
-		// loop over SPD wavelengths:
-		var w0 = specwl[0];
-		var w1 = specwl[specwl.length - 1] + 1;
-
-		// you could adapt the input to another resolution, as long as you make D65 XX nm as well:
-		var dt = specwl[1] - specwl[0];
-
-		var sum = 0;
-		var total = 0;
-
-		r.data = [];
-
-		// not very well bounds-checked here:
-		for (var i = 0; i < specwl.length; i ++) {
-			var wl = specwl[i];
-			if (isNaN(spec[i])) {
-				console.log(wl, "invalid");
-				continue;
-			}
-
-			var a = lerpAction(act, wl);
-			sum += spec[i] * a * dt;
-
-			r.data.push(spec[i] * a);
-
-			total += spec[i];
-		}
-	
-		r.sum = sum;
-		r.total = total;
-
-		return r;
-	}
 
 	function addGraph(container, wl, data, lab, data2, p, pformat) {
 
@@ -298,74 +234,12 @@ Taxonomic group:
 	// given list of lamps, and per-species data per lamp, a metric per lamp
 	function displayComposite(all) {
 		
-		console.log(all);
-		var sorted = [];
-
-		for (var lamp in all) {
-			
-			// things we should average (as groups):
-			var mean = {};
-			mean.num = 0;
-			mean.denom = 0;
-			mean.name = lamp;
-			mean.metric = all[lamp];
-
-			// pull in data from this other table when we need it:
-			if (visual[lamp]) {
-				// compute our 0-1 "acceptability" CRI mapping:
-				var lampCRI = parseFloat(visual[lamp].CRI);
-				if (lampCRI > 75) mean.metric.CRI = 1;
-				else mean.metric.CRI = 1.0 - (75 - lampCRI) / 150;
-			}
-
-			// human circadian and star visibility, always included
-			addMean(mean, "Melanopic lux");
-			addMean(mean, "Starry Light");
-
-			if (useCRI) {
-				addMean(mean, "CRI");
-			}
-
-			// either include one species or four:
-			var weight = 1.0;
-			if (group == "all") weight = 1.0 / 4;
-
-			// "mean of all four" per the paper:
-			if (group == "shearwater" || group == "all") addMean(mean, "Shearwater", weight);
-			if (group == "salmon" || group == "all") addMean(mean, "Juvenile Salmon", weight);
-
-			// insect group = 1/4
-			if (group == "insect" || group == "all") {
-				addMean(mean, "Cleve Moth Attraction", weight / 3);
-				addMean(mean, "van Grunsven Insect Phototaxis", weight / 3);
-				addMean(mean, "Bee Attraction", weight / 3);
-			}
-
-			// turtle group = 1/4
-			if (group == "turtle" || group == "all") {
-				addMean(mean, "Green Turtle 92", weight / 3);
-				addMean(mean, "Chelonia", weight / 3);
-				addMean(mean, "Loggerhead Hatchling Attraction", weight / 3);
-			}
-
-			sorted.push({"label": lamp, "value": mean.num / mean.denom});
-		}
-
-		sorted.sort(function(a, b) {
-			return a.value - b.value;
-		});
-
-		/*
-		for (var i = 0; i < sorted.length; i++) {
-			sorted[i].label = "<small>(" + (i + 1) + ")</small> " + sorted[i].label;
-		}*/
+		var sorted = SortLamps(all);
 
 		var title = "Full impact metric for all groups";
 		if (group != "all") title = "Full impact metric for " + group;
 		if (!useCRI) title += " (excluding CRI)";
 		AddChart(sorted, "composite", title, "Ranked list of impacts by lamp type (relative to D65)");
-
-		console.log(sorted);
 	}
 
 	// do m x n integrals so you don't have to ask:
