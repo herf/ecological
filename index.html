@@ -216,20 +216,6 @@ Taxonomic group:
 		return f;
 	}
 
-	function addMean(mean, id, weight) {
-		if (!weight) weight = 1.0;
-		if (!mean.metric[id]) {
-			console.log("Missing", id, mean.name);
-			return;
-		}
-
-		if (mean.metric[id].d65) {
-			mean.num += weight * mean.metric[id].d65;
-		} else {
-			mean.num += weight * mean.metric[id];
-		}
-		mean.denom += weight;
-	}
 
 	// given list of lamps, and per-species data per lamp, a metric per lamp
 	function displayComposite(all) {

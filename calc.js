@@ -17,8 +17,12 @@ function SortLamps(all) {
 		if (visual[lamp]) {
 			// compute our 0-1 "acceptability" CRI mapping:
 			var lampCRI = parseFloat(visual[lamp].CRI);
-			if (lampCRI > 75) mean.metric.CRI = 1;
-			else mean.metric.CRI = 1.0 - (75 - lampCRI) / 150;
+
+			var impactCRI = 0;
+			if (lampCRI < 75) {
+				impactCRI = (75 - lampCRI) / 150;
+			}
+			mean.metric.CRI = impactCRI;
 		}
 
 		// human circadian and star visibility, always included
@@ -61,6 +65,21 @@ function SortLamps(all) {
 	return sorted;
 }
 
+function addMean(mean, id, weight) {
+	if (!weight) weight = 1.0;
+
+	if (!mean.metric.hasOwnProperty(id)) {
+		console.log("Missing", id, mean.name);
+		return;
+	}
+
+	if (mean.metric[id].d65) {
+		mean.num += weight * mean.metric[id].d65;
+	} else {
+		mean.num += weight * mean.metric[id];
+	}
+	mean.denom += weight;
+}
 
 // Methods for integrating/interpolation action spectra (i.e. SPD * Action)
 
