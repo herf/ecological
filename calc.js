@@ -1,8 +1,15 @@
 // Compact list of important calculations, so you don't have to look at all our UI code
 
+// more is worse.
+function ImpactCRI(CRI) {
+	if (CRI >= 75) return 0;
+	return (75 - CRI) / 150;
+}
+
 function SortLamps(all) {
 
 	var sorted = [];
+	var index = {};
 
 	for (var lamp in all) {
 		
@@ -17,12 +24,7 @@ function SortLamps(all) {
 		if (visual[lamp]) {
 			// compute our 0-1 "acceptability" CRI mapping:
 			var lampCRI = parseFloat(visual[lamp].CRI);
-
-			var impactCRI = 0;
-			if (lampCRI < 75) {
-				impactCRI = (75 - lampCRI) / 150;
-			}
-			mean.metric.CRI = impactCRI;
+			mean.metric.CRI = ImpactCRI(lampCRI);
 		}
 
 		// human circadian and star visibility, always included
@@ -56,6 +58,13 @@ function SortLamps(all) {
 		}
 
 		sorted.push({"label": lamp, "value": mean.num / mean.denom});
+		index[lamp] = mean.num / mean.denom;
+	}
+
+	// normalize to D65 once more (accounts for CRI being good for D65)
+	var D65val = index["D65"];
+	for (var a in sorted) {
+		sorted[a].value /= D65val;
 	}
 
 	sorted.sort(function(a, b) {
