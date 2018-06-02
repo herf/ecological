@@ -1,6 +1,5 @@
 // Compact list of important calculations, so you don't have to look at all our UI code
 
-// more is worse.
 function ImpactCRI(CRI) {
 	if (CRI >= 75) return 0;
 	return (75 - CRI) / 150;
@@ -61,11 +60,12 @@ function SortLamps(all) {
 		index[lamp] = mean.num / mean.denom;
 	}
 
-	// normalize to D65 once more (accounts for CRI being good for D65)
+	// possibly: normalize to D65 once more (accounts for CRI being good for D65)
+	/*
 	var D65val = index["D65"];
 	for (var a in sorted) {
 		sorted[a].value /= D65val;
-	}
+	}*/
 
 	sorted.sort(function(a, b) {
 		return a.value - b.value;
