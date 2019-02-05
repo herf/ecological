@@ -8,6 +8,7 @@ Things you can do:
 
 * Review [calc.js](calc.js) if you want to reproduce our calculations
 * Clone this repository and add your own lamps to SPD.csv
+* Run "index.html" on your own machine (works in Firefox/IE but not Chrome)
 
 The CSVs are organized as follows:
 
