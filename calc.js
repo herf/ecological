@@ -119,12 +119,8 @@ function doIntegral(spec, act) {
 		return 0;
 	}
 
-	var specwl = spd["Wavelength"];
-
-	if (!specwl) {
-		console.log("Could not find wavelength column");
-		return 0;
-	}
+	var specdata = spec.data;
+	var specwl = spec.freq;
 
 	// loop over SPD wavelengths:
 	var w0 = specwl[0];
@@ -141,17 +137,17 @@ function doIntegral(spec, act) {
 	// not very well bounds-checked here:
 	for (var i = 0; i < specwl.length; i ++) {
 		var wl = specwl[i];
-		if (isNaN(spec[i])) {
+		if (isNaN(specdata[i])) {
 			console.log(wl, "invalid");
 			continue;
 		}
 
 		var a = lerpAction(act, wl);
-		sum += spec[i] * a * dt;
+		sum += specdata[i] * a * dt;
 
-		r.data.push(spec[i] * a);
+		r.data.push(specdata[i] * a);
 
-		total += spec[i];
+		total += specdata[i];
 	}
 
 	r.sum = sum;
